@@ -19,6 +19,10 @@ from mosqito.sq_metrics import sharpness_din_from_loudness
 from openpyxl import Workbook
 from openpyxl.drawing.image import Image
 
+from pathlib import Path
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import os
 
 
 # =====================================================
@@ -394,6 +398,8 @@ class LoudnessAnalyzer:
                 signal,
                 fs
             )
+            self.bark_axis = bark_axis
+            self.N_specific = N_specific
 
             phon = sone_to_phon(
                 float(N)
@@ -519,6 +525,25 @@ class LoudnessAnalyzer:
                 tk.END,
                 f"Summary saved:\n{summary_file}\n\n"
             )
+            html_file = Path(self.filename).with_suffix(".summary.html")
+
+            self.save_html_report(
+                html_file,
+                self.filename,
+                float(N),
+                float(phon),
+                float(sharpness),
+                float(dba),
+                float(self.peak_frequency),
+                self.loudness_time,
+                self.time_axis,
+                self.bark_axis,
+                self.N_specific,
+                self.frequencies,
+                self.psd_db
+            )
+
+            os.startfile(html_file)
 
         except Exception as e:
 
@@ -526,6 +551,7 @@ class LoudnessAnalyzer:
                 "Analysis Error",
                 str(e)
             )
+
 
     # =================================================
 
@@ -634,6 +660,10 @@ class LoudnessAnalyzer:
             tk.END,
             f"Profile saved:\n{csv_file}\n\n"
         )
+
+        #===========================================
+        self.time_axis = times
+        self.loudness_time = sones
 
         # ==========================================
         # PLOT
@@ -749,6 +779,8 @@ class LoudnessAnalyzer:
         peak_idx = np.argmax(psd)
         peak_frequency = frequencies[peak_idx]
         self.peak_frequency = float(peak_frequency)
+        self.frequencies = frequencies
+        self.psd_db = psd_db
 
 
         # Tonal peaks (optional)
@@ -805,6 +837,152 @@ class LoudnessAnalyzer:
         )
 
         return spectrum_png
+
+    def save_html_report(
+            self,
+            output_html,
+            filename,
+            loudness,
+            phon,
+            sharpness,
+            dba,
+            peak_frequency,
+            loudness_time,
+            time_axis,
+            bark_axis,
+            specific_loudness,
+            frequencies,
+            psd_db):
+
+        fig = make_subplots(
+            rows=3,
+            cols=1,
+            subplot_titles=(
+                "Loudness vs Time",
+                "Frequency Spectrum (Welch PSD)",
+                "Specific Loudness"
+            ),
+            vertical_spacing=0.10
+        )
+
+        # Loudness Profile
+        fig.add_trace(
+            go.Scatter(
+                x=time_axis,
+                y=loudness_time,
+                mode="lines",
+                name="Loudness"
+            ),
+            row=1,
+            col=1
+        )
+
+        fig.update_xaxes(
+            title_text="Time (s)",
+            row=1,
+            col=1
+        )
+
+        fig.update_yaxes(
+            title_text="Loudness (Sone)",
+            row=1,
+            col=1
+        )
+
+        # Frequency Spectrum
+        fig.add_trace(
+            go.Scatter(
+                x=frequencies,
+                y=psd_db,
+                mode="lines",
+                name="Spectrum"
+            ),
+            row=2,
+            col=1
+        )
+
+        # Specific Loudness
+        fig.add_trace(
+            go.Scatter(
+                x=bark_axis,
+                y=specific_loudness,
+                mode="lines",
+                name="Specific Loudness"
+            ),
+            row=3,
+            col=1
+        )
+
+        fig.update_xaxes(
+            type="log",
+            title_text="Frequency (Hz)",
+            row=2,
+            col=1
+        )
+
+        fig.update_yaxes(
+            title_text="Level (dB)",
+            row=2,
+            col=1
+        )
+
+        fig.update_xaxes(
+            title_text="Bark",
+            row=3,
+            col=1
+        )
+
+        fig.update_yaxes(
+            title_text="Sone/Bark",
+            row=3,
+            col=1
+        )
+
+        fig.update_layout(
+            height=1400,
+            title=(
+                f"{Path(filename).name}<br>"
+                f"Loudness={loudness:.2f} sone | "
+                f"Phon={phon:.1f} | "
+                f"Sharpness={sharpness:.2f} acum | "
+                f"SPL(A)={dba:.2f} dB(A) | "
+                f"Peak={peak_frequency:.1f} Hz"
+            )
+        )
+
+        html = f"""
+        <html>
+        <head>
+            <title>Acoustic Analysis Report</title>
+        </head>
+        <body>
+
+        <h2>Acoustic Analysis Report</h2>
+
+        <table border="1" cellpadding="6">
+            <tr><td>File</td><td>{Path(filename).name}</td></tr>
+            <tr><td>Loudness</td><td>{loudness:.2f} sone</td></tr>
+            <tr><td>Phon</td><td>{phon:.1f}</td></tr>
+            <tr><td>Sharpness</td><td>{sharpness:.2f} acum</td></tr>
+            <tr><td>SPL(A)</td><td>{dba:.2f} dB(A)</td></tr>
+            <tr><td>Peak Frequency</td><td>{peak_frequency:.1f} Hz</td></tr>
+        </table>
+
+        {fig.to_html(
+            full_html=False,
+            include_plotlyjs='cdn'
+        )}
+
+        </body>
+        </html>
+        """
+
+        with open(
+                output_html,
+                "w",
+                encoding="utf-8"
+        ) as f:
+            f.write(html)
 
 # =====================================================
 # MAIN
