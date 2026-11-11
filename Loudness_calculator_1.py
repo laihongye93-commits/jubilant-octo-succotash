@@ -11,12 +11,14 @@ from tkinter import simpledialog
 import json
 
 from scipy.signal import bilinear, lfilter
+from scipy.signal import welch, find_peaks
 
 from mosqito.sq_metrics import loudness_zwst
 from mosqito.sq_metrics import sharpness_din_from_loudness
 
 from openpyxl import Workbook
 from openpyxl.drawing.image import Image
+
 
 
 # =====================================================
@@ -130,6 +132,7 @@ class LoudnessAnalyzer:
             pady=10
         )
         self.calibration_factor = 1.0
+        self.peak_frequency = 0.0
 
         #tk.Button(
         #    root,
@@ -450,10 +453,19 @@ class LoudnessAnalyzer:
                 N_specific
             )
 
+            # ==========================================
+            # SPECTRUM PLOT
+            # ==========================================
+            spectrum_png = self.plot_frequency_spectrum(
+                signal,
+                fs
+            )
+
             self.result_text.insert(
                 tk.END,
                 "\nAnalysis Complete.\n"
             )
+
             # ==========================================
             # SAVE SUMMARY
             # ==========================================
@@ -469,16 +481,19 @@ class LoudnessAnalyzer:
             ws["C1"] = "Phon"
             ws["D1"] = "Sharpness (Acum)"
             ws["E1"] = "SPL dB(A)"
+            ws["F1"] = "Peak Frequency (Hz)"
 
             ws["A2"] = Path(self.filename).name
             ws["B2"] = round(float(N), 2)
             ws["C2"] = round(float(phon), 2)
             ws["D2"] = round(float(sharpness), 2)
             ws["E2"] = round(float(dba), 2)
+            ws["F2"] = round(float(self.peak_frequency), 1)
 
             # Insert plots
             profile_png = Path(self.filename).with_suffix(".loudness.png")
             specific_png = Path(self.filename).with_suffix(".specific_loudness.png")
+            spectrum_png = Path(self.filename).with_suffix(".frequency_spectrum.png")
 
             if profile_png.exists():
                 img1 = Image(str(profile_png))
@@ -491,6 +506,12 @@ class LoudnessAnalyzer:
                 img2.width = 800
                 img2.height = 400
                 ws.add_image(img2, "A30")
+
+            if spectrum_png.exists():
+                img3 = Image(str(spectrum_png))
+                img3.width = 800
+                img3.height = 400
+                ws.add_image(img3, "A55")
 
             wb.save(summary_file)
 
@@ -695,7 +716,95 @@ class LoudnessAnalyzer:
             tk.END,
             f"Specific loudness plot saved:\n{specific_png}\n\n"
         )
+    # =================================================
+    def plot_frequency_spectrum(self, signal, fs):
 
+        self.result_text.insert(
+            tk.END,
+            "Generating frequency spectrum...\n"
+        )
+
+        # Remove DC offset
+        signal -= np.mean(signal)
+
+        # Welch PSD
+        frequencies, psd = welch(
+            signal,
+            fs=fs,
+            window="hann",
+            nperseg=min(8192, len(signal)),
+            noverlap=None,
+            scaling="spectrum"
+        )
+
+        # Ignore subsonic region
+        valid = frequencies >= 20
+
+        frequencies = frequencies[valid]
+        psd = psd[valid]
+
+        psd_db = 10 * np.log10(psd + 1e-20)
+
+        # Find dominant frequency
+        peak_idx = np.argmax(psd)
+        peak_frequency = frequencies[peak_idx]
+        self.peak_frequency = float(peak_frequency)
+
+
+        # Tonal peaks (optional)
+        peaks, _ = find_peaks(
+            psd_db,
+            prominence=3.0
+        )
+
+        plt.figure(figsize=(10, 5))
+
+        plt.semilogx(
+            frequencies,
+            psd_db,
+            color="green",
+            linewidth=1.5
+        )
+
+        plt.scatter(
+            frequencies[peaks],
+            psd_db[peaks],
+            color="red",
+            s=12
+        )
+
+        plt.title("Frequency Spectrum (Welch PSD)")
+        plt.xlabel("Frequency (Hz)")
+        plt.ylabel("Level (dB)")
+        plt.grid(True, which="both")
+
+        plt.tight_layout()
+
+        spectrum_png = Path(
+            self.filename
+        ).with_suffix(
+            ".frequency_spectrum.png"
+        )
+
+        plt.savefig(
+            spectrum_png,
+            dpi=300,
+            bbox_inches="tight"
+        )
+
+        plt.close()
+
+        self.result_text.insert(
+            tk.END,
+            f"Peak Frequency : {peak_frequency:.1f} Hz\n"
+        )
+
+        self.result_text.insert(
+            tk.END,
+            f"Spectrum saved:\n{spectrum_png}\n\n"
+        )
+
+        return spectrum_png
 
 # =====================================================
 # MAIN
