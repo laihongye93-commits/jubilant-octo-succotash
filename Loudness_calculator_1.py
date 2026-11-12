@@ -5,7 +5,8 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import soundfile as sf
+from pydub import AudioSegment
+
 import matplotlib.pyplot as plt
 from tkinter import simpledialog
 import json
@@ -318,7 +319,29 @@ def tonality_vs_time(
         np.array(tone_freqs),
         np.array(delta_values)
     )
+# =====================================================
+# AUDIO LOADER
+# =====================================================
 
+def load_audio(filename):
+
+    audio = AudioSegment.from_file(filename)
+
+    signal = np.array(
+        audio.get_array_of_samples(),
+        dtype=np.float64
+    )
+
+    if audio.channels > 1:
+        signal = signal.reshape(
+            (-1, audio.channels)
+        ).mean(axis=1)
+
+    signal /= (2 ** (8 * audio.sample_width - 1))
+
+    fs = audio.frame_rate
+
+    return signal, fs
 # =====================================================
 # GUI
 # =====================================================
@@ -417,7 +440,10 @@ class LoudnessAnalyzer:
         cal_file = filedialog.askopenfilename(
             title="Select Recording Used For SPL Measurement",
             filetypes=[
-                ("Audio Files", "*.wav *.flac *.aiff *.aif")
+                (
+                    "Audio Files",
+                    "*.wav *.flac *.aiff *.aif *.mp3 *.m4a *.mp4 *.aac"
+                )
             ]
         )
 
@@ -434,10 +460,8 @@ class LoudnessAnalyzer:
 
         try:
 
-            signal, fs = sf.read(cal_file)
+            signal, fs = load_audio(cal_file)
 
-            if signal.ndim > 1:
-                signal = np.mean(signal, axis=1)
 
             rms = np.sqrt(
                 np.mean(signal ** 2)
@@ -503,7 +527,10 @@ class LoudnessAnalyzer:
         cal_file = filedialog.askopenfilename(
             title="Select Calibration Recording",
             filetypes=[
-                ("Audio Files", "*.wav *.flac")
+                (
+                    "Audio Files",
+                    "*.wav *.flac *.aiff *.aif *.mp3 *.m4a *.mp4 *.aac"
+                )
             ]
         )
 
@@ -512,10 +539,7 @@ class LoudnessAnalyzer:
 
         try:
 
-            signal, fs = sf.read(cal_file)
-
-            if signal.ndim > 1:
-                signal = np.mean(signal, axis=1)
+            signal, fs = load_audio(cal_file)
 
             rms = np.sqrt(
                 np.mean(signal ** 2)
@@ -558,8 +582,8 @@ class LoudnessAnalyzer:
         self.filename = filedialog.askopenfilename(
             filetypes=[
                 (
-                    "Audio files",
-                    "*.wav *.flac *.aiff *.aif"
+                    "Audio Files",
+                    "*.wav *.flac *.aiff *.aif *.mp3 *.m4a *.mp4 *.aac"
                 )
             ]
         )
@@ -601,16 +625,9 @@ class LoudnessAnalyzer:
                 "Loading file...\n\n"
             )
 
-            signal, fs = sf.read(
-                self.filename
-            )
-            signal = signal * self.calibration_factor
+            signal, fs = load_audio(self.filename)
 
-            if signal.ndim > 1:
-                signal = np.mean(
-                    signal,
-                    axis=1
-                )
+            signal = signal * self.calibration_factor
 
             duration = len(signal) / fs
 
