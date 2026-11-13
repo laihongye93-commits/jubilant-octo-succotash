@@ -25,15 +25,12 @@ from pathlib import Path
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import os
+
 # =====================================================
 # DIN45681 TONALITY
 # =====================================================
 
 def masking_index_av(freq):
-    """
-    Approximate DIN45681 masking index.
-    """
-
     f_pts = np.array([
         90, 125, 160, 200, 250, 315,
         400, 500, 630, 800,
@@ -58,10 +55,6 @@ def masking_index_av(freq):
 
 
 def bark_bandwidth(freq):
-    """
-    Approximate critical-band width (Hz)
-    """
-
     return (
         25 +
         75 *
@@ -70,10 +63,6 @@ def bark_bandwidth(freq):
 
 
 def din45681_kt(delta_l):
-    """
-    Official DIN45681 Kt table
-    """
-
     if delta_l <= 0:
         return 0
     elif delta_l <= 2:
@@ -125,7 +114,6 @@ def din45681_analysis(
     results = []
 
     for peak_idx in peaks:
-
         ft = frequencies[peak_idx]
 
         if ft < fmin:
@@ -193,7 +181,6 @@ def din45681_analysis(
 # =====================================================
 
 def a_weighting(fs):
-
     f1 = 20.598997
     f2 = 107.65265
     f3 = 737.86223
@@ -222,11 +209,8 @@ def a_weighting(fs):
 
 
 def calculate_dba(signal, fs):
-
     b, a = a_weighting(fs)
-
     weighted = lfilter(b, a, signal)
-
     rms = np.sqrt(np.mean(weighted ** 2))
 
     if rms <= 0:
@@ -236,11 +220,11 @@ def calculate_dba(signal, fs):
 
 
 def sone_to_phon(sone):
-
     if sone <= 0:
         return 0
 
     return 40 + 10 * np.log2(sone)
+
 # =====================================================
 # DIN45681 TONALITY
 # =====================================================
@@ -270,47 +254,19 @@ def tonality_vs_time(
             len(signal) - frame_size,
             hop_size):
 
-        frame = signal[
-                start:
-                start + frame_size
-                ]
-
-        tones = din45681_analysis(
-            frame,
-            fs
-        )
-
-        center_time = (
-                start +
-                frame_size / 2
-        ) / fs
-
+        frame = signal[start:start + frame_size]
+        tones = din45681_analysis(frame, fs)
+        center_time = (start + frame_size / 2) / fs
         times.append(center_time)
 
         if len(tones):
-
             strongest = tones[0]
-
-            kt_values.append(
-                strongest["kt"]
-            )
-
-            tone_freqs.append(
-                strongest["frequency_hz"]
-            )
-
-            delta_values.append(
-                strongest["delta_l"]
-            )
-
+            kt_values.append(strongest["kt"])
+            tone_freqs.append(strongest["frequency_hz"])
+            delta_values.append(strongest["delta_l"])
         else:
-
             kt_values.append(0)
-
-            tone_freqs.append(
-                np.nan
-            )
-
+            tone_freqs.append(np.nan)
             delta_values.append(0)
 
     return (
@@ -319,14 +275,13 @@ def tonality_vs_time(
         np.array(tone_freqs),
         np.array(delta_values)
     )
+
 # =====================================================
 # AUDIO LOADER
 # =====================================================
 
 def load_audio(filename):
-
     audio = AudioSegment.from_file(filename)
-
     signal = np.array(
         audio.get_array_of_samples(),
         dtype=np.float64
@@ -338,10 +293,10 @@ def load_audio(filename):
         ).mean(axis=1)
 
     signal /= (2 ** (8 * audio.sample_width - 1))
-
     fs = audio.frame_rate
 
     return signal, fs
+
 # =====================================================
 # GUI
 # =====================================================
@@ -351,75 +306,12 @@ class LoudnessAnalyzer:
     def __init__(self, root):
 
         self.root = root
-
-        self.root.title("PC Fan Acoustic Analyzer")
-
-        self.root.geometry("900x900")
+        self.root.title("Acoustic Analyzer")
+        self.root.geometry("1000x850")
 
         self.filename = None
-
-        tk.Label(
-            root,
-            text="ISO 532 Loudness Analyzer",
-            font=("Arial", 16, "bold")
-        ).pack(pady=10)
-
-        self.file_label = tk.Label(
-            root,
-            text="No file selected",
-            fg="blue"
-        )
-
-        self.file_label.pack()
-
-        tk.Button(
-            root,
-            text="Select Audio File",
-            width=25,
-            command=self.select_file
-        ).pack(pady=5)
-
-        tk.Button(
-            root,
-            text="Run Analysis",
-            width=25,
-            command=self.start_analysis
-        ).pack(pady=5)
-
-        self.result_text = tk.Text(
-            root,
-            height=25
-        )
-
-        self.result_text.pack(
-            fill="both",
-            expand=True,
-            padx=10,
-            pady=10
-        )
         self.calibration_factor = 1.0
         self.peak_frequency = 0.0
-
-        #tk.Button(
-        #    root,
-        #    text="Calibrate",
-         #   width=25,
-         #   command=self.calibrate
-        #).pack(pady=5)
-
-        #self.cal_label = tk.Label(
-        #    root,
-        #    text=f"Calibration Factor: {self.calibration_factor:.4f}"
-        #)
-
-        #self.cal_label.pack()
-        tk.Button(
-            root,
-            text="Calibrate From SPL Meter",
-            width=25,
-            command=self.calibrate_from_spl
-        ).pack(pady=5)
-
 
         try:
             with open("calibration.json", "r") as f:
@@ -427,16 +319,106 @@ class LoudnessAnalyzer:
         except:
             pass
 
-        self.cal_label = tk.Label(
+        # ================= TOP TITLE =================
+        tk.Label(
             root,
+            text="ISO 532 Loudness Analyzer",
+            font=("Arial", 16, "bold")
+        ).pack(pady=(15, 10))
+
+        # ================= CONTROL PANEL FRAME (3 Columns) =================
+        control_frame = tk.Frame(root)
+        control_frame.pack(pady=5, fill="x", padx=20)
+
+        # Configure columns: 0=Left (Calibration), 1=Center (File/Analysis), 2=Right (Checkboxes)
+        control_frame.grid_columnconfigure(0, weight=1)
+        control_frame.grid_columnconfigure(1, weight=1)
+        control_frame.grid_columnconfigure(2, weight=1)
+
+        # --- LEFT COLUMN: Calibration ---
+        left_frame = tk.Frame(control_frame)
+        left_frame.grid(row=0, column=0, sticky="w")
+
+        tk.Button(
+            left_frame,
+            text="Calibrate From SPL Meter",
+            width=22,
+            command=self.calibrate_from_spl
+        ).pack(anchor="w", pady=(0, 5))
+
+        self.cal_label = tk.Label(
+            left_frame,
             text=f"Calibration Factor: {self.calibration_factor:.4f}"
         )
+        self.cal_label.pack(anchor="w")
 
-        self.cal_label.pack()
+        # --- CENTER COLUMN: File Selection & Run ---
+        center_frame = tk.Frame(control_frame)
+        center_frame.grid(row=0, column=1)
+
+        self.file_label = tk.Label(
+            center_frame,
+            text="No file selected",
+            fg="blue"
+        )
+        self.file_label.pack(pady=(0, 3))
+
+        tk.Button(
+            center_frame,
+            text="Select Audio File",
+            width=22,
+            command=self.select_file
+        ).pack(pady=(0, 3))
+
+        run_btn = tk.Button(
+            center_frame,
+            text="Run Analysis",
+            width=22,
+            bg="#2ecc71",
+            fg="white",
+            command=self.start_analysis
+        )
+        run_btn.pack()
+
+        # --- RIGHT COLUMN: Checkboxes ---
+        right_frame = tk.Frame(control_frame)
+        right_frame.grid(row=0, column=2, sticky="e")
+
+        self.save_xlsx_var = tk.BooleanVar(value=True)
+        tk.Checkbutton(
+            right_frame,
+            text="Save XLSX Summary Report",
+            variable=self.save_xlsx_var
+        ).pack(anchor="w", pady=1)
+
+        self.save_csv_var = tk.BooleanVar(value=True)
+        tk.Checkbutton(
+            right_frame,
+            text="Save Loudness CSV Profile",
+            variable=self.save_csv_var
+        ).pack(anchor="w", pady=1)
+
+        self.save_png_var = tk.BooleanVar(value=True)
+        tk.Checkbutton(
+            right_frame,
+            text="Save Plot PNG Files (Cleanup if unchecked)",
+            variable=self.save_png_var
+        ).pack(anchor="w", pady=1)
+
+        # ================= RESULTS TEXT AREA =================
+        self.result_text = tk.Text(
+            root,
+            height=28
+        )
+        self.result_text.pack(
+            fill="both",
+            expand=True,
+            padx=20,
+            pady=15
+        )
 
     # =================================================
     def calibrate_from_spl(self):
-
         cal_file = filedialog.askopenfilename(
             title="Select Recording Used For SPL Measurement",
             filetypes=[
@@ -459,126 +441,35 @@ class LoudnessAnalyzer:
             return
 
         try:
-
             signal, fs = load_audio(cal_file)
-
-
-            rms = np.sqrt(
-                np.mean(signal ** 2)
-            )
+            rms = np.sqrt(np.mean(signal ** 2))
 
             if rms <= 0:
-                raise Exception(
-                    "Invalid recording"
-                )
+                raise Exception("Invalid recording")
 
-            # Convert dB SPL -> Pa
-            pressure_pa = (
-                    20e-6 *
-                    10 ** (spl / 20)
-            )
+            pressure_pa = 20e-6 * 10 ** (spl / 20)
+            self.calibration_factor = pressure_pa / rms
 
-            self.calibration_factor = (
-                    pressure_pa / rms
-            )
-
-            with open(
-                    "calibration.json",
-                    "w"
-            ) as f:
-
-                json.dump(
-                    {
-                        "factor":
-                            self.calibration_factor
-                    },
-                    f,
-                    indent=4
-                )
+            with open("calibration.json", "w") as f:
+                json.dump({"factor": self.calibration_factor}, f, indent=4)
 
             self.cal_label.config(
-                text=
-                f"Calibration Factor: "
-                f"{self.calibration_factor:.6f}"
+                text=f"Calibration Factor: {self.calibration_factor:.6f}"
             )
 
             result = (
                 f"Measured SPL : {spl:.2f} dB\n"
                 f"Recording RMS: {rms:.6f}\n"
-                f"Pressure     : "
-                f"{pressure_pa:.8f} Pa\n\n"
-                f"Calibration Factor:\n"
-                f"{self.calibration_factor:.6f}"
+                f"Pressure     : {pressure_pa:.8f} Pa\n\n"
+                f"Calibration Factor:\n{self.calibration_factor:.6f}"
             )
 
-            messagebox.showinfo(
-                "Calibration Complete",
-                result
-            )
+            messagebox.showinfo("Calibration Complete", result)
 
         except Exception as e:
+            messagebox.showerror("Calibration Error", str(e))
 
-            messagebox.showerror(
-                "Calibration Error",
-                str(e)
-            )
-    def calibrate(self):
-
-        cal_file = filedialog.askopenfilename(
-            title="Select Calibration Recording",
-            filetypes=[
-                (
-                    "Audio Files",
-                    "*.wav *.flac *.aiff *.aif *.mp3 *.m4a *.mp4 *.aac"
-                )
-            ]
-        )
-
-        if not cal_file:
-            return
-
-        try:
-
-            signal, fs = load_audio(cal_file)
-
-            rms = np.sqrt(
-                np.mean(signal ** 2)
-            )
-
-            if rms <= 0:
-                raise Exception(
-                    "Invalid calibration recording."
-                )
-
-            #
-            # Typical acoustic calibrator:
-            # 94 dB SPL @ 1 kHz
-            #
-            reference_pressure = 1.002
-
-            self.calibration_factor = (
-                    reference_pressure / rms
-            )
-
-            self.cal_label.config(
-                text=f"Calibration Factor: "
-                     f"{self.calibration_factor:.3f}"
-            )
-
-            messagebox.showinfo(
-                "Calibration Complete",
-                f"Factor = "
-                f"{self.calibration_factor:.3f}"
-            )
-
-        except Exception as e:
-
-            messagebox.showerror(
-                "Calibration Error",
-                str(e)
-            )
     def select_file(self):
-
         self.filename = filedialog.askopenfilename(
             filetypes=[
                 (
@@ -589,19 +480,11 @@ class LoudnessAnalyzer:
         )
 
         if self.filename:
-            self.file_label.config(
-                text=self.filename
-            )
-
-    # =================================================
+            self.file_label.config(text=Path(self.filename).name)
 
     def start_analysis(self):
-
         if not self.filename:
-            messagebox.showerror(
-                "Error",
-                "Please select a file."
-            )
+            messagebox.showerror("Error", "Please select a file.")
             return
 
         threading.Thread(
@@ -609,223 +492,113 @@ class LoudnessAnalyzer:
             daemon=True
         ).start()
 
-    # =================================================
-
     def analyze_file(self):
-
         try:
-
-            self.result_text.delete(
-                "1.0",
-                tk.END
-            )
-
-            self.result_text.insert(
-                tk.END,
-                "Loading file...\n\n"
-            )
+            self.result_text.delete("1.0", tk.END)
+            self.result_text.insert(tk.END, "Loading file...\n\n")
 
             signal, fs = load_audio(self.filename)
-
             signal = signal * self.calibration_factor
-
             duration = len(signal) / fs
 
-            self.result_text.insert(
-                tk.END,
-                f"File: {Path(self.filename).name}\n"
-            )
+            self.result_text.insert(tk.END, f"File: {Path(self.filename).name}\n")
+            self.result_text.insert(tk.END, f"Sample Rate: {fs} Hz\n")
+            self.result_text.insert(tk.END, f"Duration: {duration:.2f} sec\n\n")
 
-            self.result_text.insert(
-                tk.END,
-                f"Sample Rate: {fs} Hz\n"
-            )
-
-            self.result_text.insert(
-                tk.END,
-                f"Duration: {duration:.2f} sec\n\n"
-            )
-
-            # ==========================================
-            # LOUDNESS
-            # ==========================================
-
-            N, N_specific, bark_axis = loudness_zwst(
-                signal,
-                fs
-            )
+            N, N_specific, bark_axis = loudness_zwst(signal, fs)
             self.bark_axis = bark_axis
             self.N_specific = N_specific
 
-            phon = sone_to_phon(
-                float(N)
-            )
+            phon = sone_to_phon(float(N))
+            sharpness = sharpness_din_from_loudness(N, N_specific)
+            dba = calculate_dba(signal, fs)
 
-            sharpness = sharpness_din_from_loudness(
-                N,
-                N_specific
-            )
+            self.result_text.insert(tk.END, "===== OVERALL RESULTS =====\n\n")
+            self.result_text.insert(tk.END, f"Loudness      : {N:.2f} sones\n")
+            self.result_text.insert(tk.END, f"Phon Level    : {phon:.2f} phon\n")
+            self.result_text.insert(tk.END, f"Sharpness     : {sharpness:.2f} acum\n")
+            self.result_text.insert(tk.END, f"SPL(A)        : {dba:.2f} dB(A)\n\n")
 
-            dba = calculate_dba(
-                signal,
-                fs
-            )
+            self.compute_profile(signal, fs)
+            tonality_png = self.plot_tonality(signal, fs)
+            self.plot_specific_loudness(bark_axis, N_specific)
+            spectrum_png = self.plot_frequency_spectrum(signal, fs)
 
-            self.result_text.insert(
-                tk.END,
-                "===== OVERALL RESULTS =====\n\n"
-            )
+            self.result_text.insert(tk.END, "\nAnalysis Complete.\n")
 
-            self.result_text.insert(
-                tk.END,
-                f"Loudness      : {N:.2f} sones\n"
-            )
-
-            self.result_text.insert(
-                tk.END,
-                f"Phon Level    : {phon:.2f} phon\n"
-            )
-
-            self.result_text.insert(
-                tk.END,
-                f"Sharpness     : {sharpness:.2f} acum\n"
-            )
-
-            self.result_text.insert(
-                tk.END,
-                f"SPL(A)        : {dba:.2f} dB(A)\n\n"
-            )
-
-
-            # ==========================================
-            # LOUDNESS PROFILE
-            # ==========================================
-
-            self.compute_profile(
-                signal,
-                fs
-            )
-            tonality_png = self.plot_tonality(
-                signal,
-                fs
-            )
-            # ==========================================
-            # SPECIFIC LOUDNESS PLOT
-            # ==========================================
-
-            self.plot_specific_loudness(
-                bark_axis,
-                N_specific
-            )
-
-            # ==========================================
-            # SPECTRUM PLOT
-            # ==========================================
-            spectrum_png = self.plot_frequency_spectrum(
-                signal,
-                fs
-            )
-
-            self.result_text.insert(
-                tk.END,
-                "\nAnalysis Complete.\n"
-            )
-
-            # ==========================================
-            # SAVE SUMMARY
-            # ==========================================
-            summary_file = Path(self.filename).with_suffix(".summary.xlsx")
-
-            wb = Workbook()
-            ws = wb.active
-            ws.title = "Summary"
-
-            # Summary Data
-            ws["A1"] = "File"
-            ws["B1"] = "Loudness (Sone)"
-            ws["C1"] = "Phon"
-            ws["D1"] = "Sharpness (Acum)"
-            ws["E1"] = "SPL dB(A)"
-            ws["F1"] = "Peak Frequency (Hz)"
-
-            ws["A2"] = Path(self.filename).name
-            ws["B2"] = round(float(N), 2)
-            ws["C2"] = round(float(phon), 2)
-            ws["D2"] = round(float(sharpness), 2)
-            ws["E2"] = round(float(dba), 2)
-            ws["F2"] = round(float(self.peak_frequency), 1)
-
-            # Insert plots
             profile_png = Path(self.filename).with_suffix(".loudness.png")
             specific_png = Path(self.filename).with_suffix(".specific_loudness.png")
-            spectrum_png = Path(self.filename).with_suffix(".frequency_spectrum.png")
-            tonality_png = Path(self.filename).with_suffix(
-                ".tonality.png"
-            )
+            spectrum_png_path = Path(self.filename).with_suffix(".frequency_spectrum.png")
+            tonality_png_path = Path(self.filename).with_suffix(".tonality.png")
 
-            if profile_png.exists():
-                img1 = Image(str(profile_png))
-                img1.width = 800
-                img1.height = 400
-                ws.add_image(img1, "A5")
+            if self.save_xlsx_var.get():
+                summary_file = Path(self.filename).with_suffix(".summary.xlsx")
+                wb = Workbook()
+                ws = wb.active
+                ws.title = "Summary"
 
-            if specific_png.exists():
-                img2 = Image(str(specific_png))
-                img2.width = 800
-                img2.height = 400
-                ws.add_image(img2, "A30")
+                ws["A1"] = "File"
+                ws["B1"] = "Loudness (Sone)"
+                ws["C1"] = "Phon"
+                ws["D1"] = "Sharpness (Acum)"
+                ws["E1"] = "SPL dB(A)"
+                ws["F1"] = "Peak Frequency (Hz)"
 
-            if spectrum_png.exists():
-                img3 = Image(str(spectrum_png))
-                img3.width = 800
-                img3.height = 400
-                ws.add_image(img3, "A55")
+                ws["A2"] = Path(self.filename).name
+                ws["B2"] = round(float(N), 2)
+                ws["C2"] = round(float(phon), 2)
+                ws["D2"] = round(float(sharpness), 2)
+                ws["E2"] = round(float(dba), 2)
+                ws["F2"] = round(float(self.peak_frequency), 1)
 
-            if tonality_png.exists():
-                img4 = Image(
-                    str(tonality_png)
-                )
+                if profile_png.exists():
+                    img1 = Image(str(profile_png))
+                    img1.width = 800
+                    img1.height = 400
+                    ws.add_image(img1, "A5")
 
-                img4.width = 800
-                img4.height = 400
+                if specific_png.exists():
+                    img2 = Image(str(specific_png))
+                    img2.width = 800
+                    img2.height = 400
+                    ws.add_image(img2, "A30")
 
-                ws.add_image(
-                    img4,
-                    "A80"
-                )
-            tonality_ws = wb.create_sheet(
-                "Tonality"
-            )
+                if spectrum_png_path.exists():
+                    img3 = Image(str(spectrum_png_path))
+                    img3.width = 800
+                    img3.height = 400
+                    ws.add_image(img3, "A55")
 
-            tonality_ws.append(
-                [
+                if tonality_png_path.exists():
+                    img4 = Image(str(tonality_png_path))
+                    img4.width = 800
+                    img4.height = 400
+                    ws.add_image(img4, "A80")
+
+                tonality_ws = wb.create_sheet("Tonality")
+                tonality_ws.append([
                     "Time (s)",
                     "Kt (dB)",
                     "Delta L (dB)",
                     "Tone Frequency (Hz)"
-                ]
-            )
-
-            for t, k, d, f in zip(
-                    self.tonality_axis,
-                    self.tonality_time,
-                    self.delta_l_time,
-                    self.tone_frequency_time):
-                tonality_ws.append([
-                    float(t),
-                    float(k),
-                    float(d),
-                    float(f) if not np.isnan(f) else None
                 ])
 
-            wb.save(summary_file)
+                for t, k, d, f in zip(
+                        self.tonality_axis,
+                        self.tonality_time,
+                        self.delta_l_time,
+                        self.tone_frequency_time):
+                    tonality_ws.append([
+                        float(t),
+                        float(k),
+                        float(d),
+                        float(f) if not np.isnan(f) else None
+                    ])
 
-            self.result_text.insert(
-                tk.END,
-                f"Summary saved:\n{summary_file}\n\n"
-            )
+                wb.save(summary_file)
+                self.result_text.insert(tk.END, f"Summary saved:\n{summary_file}\n\n")
+
             html_file = Path(self.filename).with_suffix(".summary.html")
-
             self.save_html_report(
                 html_file,
                 self.filename,
@@ -842,221 +615,88 @@ class LoudnessAnalyzer:
                 self.psd_db
             )
 
+            if not self.save_png_var.get():
+                for p_file in [profile_png, specific_png, spectrum_png_path, tonality_png_path]:
+                    if p_file.exists():
+                        try:
+                            p_file.unlink()
+                        except:
+                            pass
+                self.result_text.insert(tk.END, "Intermediate PNG plots cleaned up.\n\n")
+
             os.startfile(html_file)
 
         except Exception as e:
+            messagebox.showerror("Analysis Error", str(e))
 
-            messagebox.showerror(
-                "Analysis Error",
-                str(e)
-            )
-
-
-    # =================================================
-
-    def compute_profile(
-            self,
-            signal,
-            fs):
-
-        window = int(
-            0.5 * fs
-        )
-
-        hop = int(
-            0.1 * fs
-        )
-
+    def compute_profile(self, signal, fs):
+        window = int(0.5 * fs)
+        hop = int(0.1 * fs)
         times = []
         sones = []
 
-        self.result_text.insert(
-            tk.END,
-            "Generating loudness profile...\n"
-        )
+        self.result_text.insert(tk.END, "Generating loudness profile...\n")
 
-        for start in range(
-                0,
-                len(signal) - window,
-                hop):
-
+        for start in range(0, len(signal) - window, hop):
             try:
-
-                frame = signal[
-                    start:start + window
-                ]
-
-                result = loudness_zwst(
-                    frame,
-                    fs
-                )
-
-                loudness = float(
-                    result[0]
-                )
-
-                times.append(
-                    start / fs
-                )
-
-                sones.append(
-                    loudness
-                )
-
+                frame = signal[start:start + window]
+                result = loudness_zwst(frame, fs)
+                loudness = float(result[0])
+                times.append(start / fs)
+                sones.append(loudness)
             except:
                 pass
 
         if len(sones):
+            avg_sone = np.mean(sones)
+            min_sone = np.min(sones)
+            max_sone = np.max(sones)
 
-            avg_sone = np.mean(
-                sones
-            )
+            self.result_text.insert(tk.END, f"Average Loudness : {avg_sone:.2f} sones\n")
+            self.result_text.insert(tk.END, f"Peak Loudness    : {max_sone:.2f} sones\n")
+            self.result_text.insert(tk.END, f"Minimum Loudness : {min_sone:.2f} sones\n\n")
 
-            min_sone = np.min(
-                sones
-            )
+        if self.save_csv_var.get():
+            profile_df = pd.DataFrame({
+                "Time_s": times,
+                "Loudness_Sone": sones
+            })
+            csv_file = Path(self.filename).with_suffix(".loudness.csv")
+            profile_df.to_csv(csv_file, index=False)
+            self.result_text.insert(tk.END, f"Profile saved:\n{csv_file}\n\n")
 
-            max_sone = np.max(
-                sones
-            )
-
-            self.result_text.insert(
-                tk.END,
-                f"Average Loudness : {avg_sone:.2f} sones\n"
-            )
-
-            self.result_text.insert(
-                tk.END,
-                f"Peak Loudness    : {max_sone:.2f} sones\n"
-            )
-
-            self.result_text.insert(
-                tk.END,
-                f"Minimum Loudness : {min_sone:.2f} sones\n\n"
-            )
-
-        # ==========================================
-        # SAVE PROFILE CSV
-        # ==========================================
-
-        profile_df = pd.DataFrame({
-            "Time_s": times,
-            "Loudness_Sone": sones
-        })
-
-        csv_file = Path(
-            self.filename
-        ).with_suffix(
-            ".loudness.csv"
-        )
-
-        profile_df.to_csv(
-            csv_file,
-            index=False
-        )
-
-        self.result_text.insert(
-            tk.END,
-            f"Profile saved:\n{csv_file}\n\n"
-        )
-
-        #===========================================
         self.time_axis = times
         self.loudness_time = sones
 
-        # ==========================================
-        # PLOT
-        # ==========================================
-
-        plt.figure(
-            figsize=(10, 5)
-        )
-
-        plt.plot(
-            times,
-            sones,
-            color="blue"
-        )
-
-        plt.title(
-            "Loudness vs Time"
-        )
-
-        plt.xlabel(
-            "Time (s)"
-        )
-
-        plt.ylabel(
-            "Loudness (sone)"
-        )
-
+        plt.figure(figsize=(10, 5))
+        plt.plot(times, sones, color="blue")
+        plt.title("Loudness vs Time")
+        plt.xlabel("Time (s)")
+        plt.ylabel("Loudness (sone)")
         plt.grid(True)
-
         plt.tight_layout()
 
         profile_png = Path(self.filename).with_suffix(".loudness.png")
         plt.savefig(profile_png, dpi=300, bbox_inches="tight")
         plt.close()
 
-        self.result_text.insert(
-            tk.END,
-            f"Loudness plot saved:\n{profile_png}\n\n"
-        )
-
-    # =================================================
-
-    def plot_specific_loudness(
-            self,
-            bark_axis,
-            specific_loudness):
-
-        plt.figure(
-            figsize=(10, 5)
-        )
-
-        plt.plot(
-            bark_axis,
-            specific_loudness,
-            color="red",
-            linewidth=2
-        )
-
-        plt.title(
-            "Specific Loudness Distribution"
-        )
-
-        plt.xlabel(
-            "Critical Band Rate (Bark)"
-        )
-
-        plt.ylabel(
-            "Specific Loudness (sone/Bark)"
-        )
-
+    def plot_specific_loudness(self, bark_axis, specific_loudness):
+        plt.figure(figsize=(10, 5))
+        plt.plot(bark_axis, specific_loudness, color="red", linewidth=2)
+        plt.title("Specific Loudness Distribution")
+        plt.xlabel("Critical Band Rate (Bark)")
+        plt.ylabel("Specific Loudness (sone/Bark)")
         plt.grid(True)
-
         plt.tight_layout()
 
         specific_png = Path(self.filename).with_suffix(".specific_loudness.png")
         plt.savefig(specific_png, dpi=300, bbox_inches="tight")
         plt.close()
 
-        self.result_text.insert(
-            tk.END,
-            f"Specific loudness plot saved:\n{specific_png}\n\n"
-        )
-    # =================================================
     def plot_frequency_spectrum(self, signal, fs):
-
-        self.result_text.insert(
-            tk.END,
-            "Generating frequency spectrum...\n"
-        )
-
-        # Remove DC offset
+        self.result_text.insert(tk.END, "Generating frequency spectrum...\n")
         signal -= np.mean(signal)
 
-        # Welch PSD
         frequencies, psd = welch(
             signal,
             fs=fs,
@@ -1066,90 +706,38 @@ class LoudnessAnalyzer:
             scaling="spectrum"
         )
 
-        # Ignore subsonic region
         valid = frequencies >= 20
-
         frequencies = frequencies[valid]
         psd = psd[valid]
-
         psd_db = 10 * np.log10(psd + 1e-20)
 
-        # Find dominant frequency
         peak_idx = np.argmax(psd)
         peak_frequency = frequencies[peak_idx]
         self.peak_frequency = float(peak_frequency)
         self.frequencies = frequencies
         self.psd_db = psd_db
 
-
-        # Tonal peaks (optional)
-        peaks, _ = find_peaks(
-            psd_db,
-            prominence=3.0
-        )
+        peaks, _ = find_peaks(psd_db, prominence=3.0)
 
         plt.figure(figsize=(10, 5))
-
-        plt.semilogx(
-            frequencies,
-            psd_db,
-            color="green",
-            linewidth=1.5
-        )
-
-        plt.scatter(
-            frequencies[peaks],
-            psd_db[peaks],
-            color="red",
-            s=12
-        )
-
+        plt.semilogx(frequencies, psd_db, color="green", linewidth=1.5)
+        plt.scatter(frequencies[peaks], psd_db[peaks], color="red", s=12)
         plt.title("Frequency Spectrum (Welch PSD)")
         plt.xlabel("Frequency (Hz)")
         plt.ylabel("Level (dB)")
         plt.grid(True, which="both")
-
         plt.tight_layout()
 
-        spectrum_png = Path(
-            self.filename
-        ).with_suffix(
-            ".frequency_spectrum.png"
-        )
-
-        plt.savefig(
-            spectrum_png,
-            dpi=300,
-            bbox_inches="tight"
-        )
-
+        spectrum_png = Path(self.filename).with_suffix(".frequency_spectrum.png")
+        plt.savefig(spectrum_png, dpi=300, bbox_inches="tight")
         plt.close()
 
-        self.result_text.insert(
-            tk.END,
-            f"Peak Frequency : {peak_frequency:.1f} Hz\n"
-        )
-
-        self.result_text.insert(
-            tk.END,
-            f"Spectrum saved:\n{spectrum_png}\n\n"
-        )
-
+        self.result_text.insert(tk.END, f"Peak Frequency : {peak_frequency:.1f} Hz\n")
         return spectrum_png
 
     def plot_tonality(self, signal, fs):
-
-        self.result_text.insert(
-            tk.END,
-            "Generating tonality profile...\n"
-        )
-
-        times, kt, tone_freq, delta_l = (
-            tonality_vs_time(
-                signal,
-                fs
-            )
-        )
+        self.result_text.insert(tk.END, "Generating tonality profile...\n")
+        times, kt, tone_freq, delta_l = tonality_vs_time(signal, fs)
 
         self.tonality_time = kt
         self.tonality_axis = times
@@ -1157,43 +745,16 @@ class LoudnessAnalyzer:
         self.delta_l_time = delta_l
 
         plt.figure(figsize=(10, 5))
-
-        plt.plot(
-            times,
-            kt,
-            color="red",
-            linewidth=2
-        )
-
+        plt.plot(times, kt, color="red", linewidth=2)
         plt.xlabel("Time (s)")
         plt.ylabel("Kt (dB)")
-        plt.title(
-            "DIN45681 Tonality vs Time"
-        )
-
+        plt.title("DIN45681 Tonality vs Time")
         plt.grid(True)
-
         plt.tight_layout()
 
-        tonality_png = Path(
-            self.filename
-        ).with_suffix(
-            ".tonality.png"
-        )
-
-        plt.savefig(
-            tonality_png,
-            dpi=300,
-            bbox_inches="tight"
-        )
-
+        tonality_png = Path(self.filename).with_suffix(".tonality.png")
+        plt.savefig(tonality_png, dpi=300, bbox_inches="tight")
         plt.close()
-
-        self.result_text.insert(
-            tk.END,
-            f"Tonality plot saved:\n"
-            f"{tonality_png}\n\n"
-        )
 
         return tonality_png
 
@@ -1225,99 +786,21 @@ class LoudnessAnalyzer:
             vertical_spacing=0.10
         )
 
-        # Loudness Profile
-        fig.add_trace(
-            go.Scatter(
-                x=time_axis,
-                y=loudness_time,
-                mode="lines",
-                name="Loudness"
-            ),
-            row=1,
-            col=1
-        )
+        fig.add_trace(go.Scatter(x=time_axis, y=loudness_time, mode="lines", name="Loudness"), row=1, col=1)
+        fig.update_xaxes(title_text="Time (s)", row=1, col=1)
+        fig.update_yaxes(title_text="Loudness (Sone)", row=1, col=1)
 
-        fig.update_xaxes(
-            title_text="Time (s)",
-            row=1,
-            col=1
-        )
+        fig.add_trace(go.Scatter(x=self.tonality_axis, y=self.tonality_time, mode="lines", name="Tonality"), row=2, col=1)
+        fig.update_xaxes(title_text="Time (s)", row=2, col=1)
+        fig.update_yaxes(title_text="Kt (dB)", row=2, col=1)
 
-        fig.update_yaxes(
-            title_text="Loudness (Sone)",
-            row=1,
-            col=1
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=self.tonality_axis,
-                y=self.tonality_time,
-                mode="lines",
-                name="Tonality"
-            ),
-            row=2,
-            col=1
-        )
+        fig.add_trace(go.Scatter(x=frequencies, y=psd_db, mode="lines", name="Spectrum"), row=3, col=1)
+        fig.add_trace(go.Scatter(x=bark_axis, y=specific_loudness, mode="lines", name="Specific Loudness"), row=4, col=1)
 
-        fig.update_xaxes(
-            title_text="Time (s)",
-            row=2,
-            col=1
-        )
-
-        fig.update_yaxes(
-            title_text="Kt (dB)",
-            row=2,
-            col=1
-        )
-        # Frequency Spectrum
-        fig.add_trace(
-            go.Scatter(
-                x=frequencies,
-                y=psd_db,
-                mode="lines",
-                name="Spectrum"
-            ),
-            row=3,
-            col=1
-        )
-
-        # Specific Loudness
-        fig.add_trace(
-            go.Scatter(
-                x=bark_axis,
-                y=specific_loudness,
-                mode="lines",
-                name="Specific Loudness"
-            ),
-            row=4,
-            col=1
-        )
-
-        fig.update_xaxes(
-            type="log",
-            title_text="Frequency (Hz)",
-            row=3,
-            col=1
-        )
-
-        fig.update_yaxes(
-            title_text="Level (dB)",
-            row=3,
-            col=1
-        )
-
-        fig.update_xaxes(
-            title_text="Bark",
-            row=4,
-            col=1
-        )
-
-        fig.update_yaxes(
-            title_text="Sone/Bark",
-            row=4,
-            col=1
-        )
+        fig.update_xaxes(type="log", title_text="Frequency (Hz)", row=3, col=1)
+        fig.update_yaxes(title_text="Level (dB)", row=3, col=1)
+        fig.update_xaxes(title_text="Bark", row=4, col=1)
+        fig.update_yaxes(title_text="Sone/Bark", row=4, col=1)
 
         fig.update_layout(
             height=1800,
@@ -1360,13 +843,9 @@ class LoudnessAnalyzer:
 
         html = f"""
         <html>
-        <head>
-            <title>Acoustic Analysis Report</title>
-        </head>
+        <head><title>Acoustic Analysis Report</title></head>
         <body>
-
         <h2>Acoustic Analysis Report</h2>
-
         <table border="1" cellpadding="6">
             <tr><td>File</td><td>{Path(filename).name}</td></tr>
             <tr><td>Loudness</td><td>{loudness:.2f} sone</td></tr>
@@ -1375,24 +854,14 @@ class LoudnessAnalyzer:
             <tr><td>SPL(A)</td><td>{dba:.2f} dB(A)</td></tr>
             <tr><td>Peak Frequency</td><td>{peak_frequency:.1f} Hz</td></tr>
         </table>
-        
         <br>
-        
         {tonality_table}
-        
-        {fig.to_html(
-            full_html=False,
-            include_plotlyjs='cdn'
-        )}
+        {fig.to_html(full_html=False, include_plotlyjs='cdn')}
         </body>
         </html>
         """
 
-        with open(
-                output_html,
-                "w",
-                encoding="utf-8"
-        ) as f:
+        with open(output_html, "w", encoding="utf-8") as f:
             f.write(html)
 
 # =====================================================
@@ -1400,11 +869,6 @@ class LoudnessAnalyzer:
 # =====================================================
 
 if __name__ == "__main__":
-
     root = tk.Tk()
-
-    app = LoudnessAnalyzer(
-        root
-    )
-
+    app = LoudnessAnalyzer(root)
     root.mainloop()
