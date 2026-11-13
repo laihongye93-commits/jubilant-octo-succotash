@@ -681,11 +681,13 @@ class LoudnessAnalyzer:
         plt.close()
 
     def plot_specific_loudness(self, bark_axis, specific_loudness):
+        from matplotlib.ticker import MultipleLocator
         plt.figure(figsize=(10, 5))
         plt.plot(bark_axis, specific_loudness, color="red", linewidth=2)
         plt.title("Specific Loudness Distribution")
         plt.xlabel("Critical Band Rate (Bark)")
         plt.ylabel("Specific Loudness (sone/Bark)")
+        plt.gca().xaxis.set_major_locator(MultipleLocator(1))
         plt.grid(True)
         plt.tight_layout()
 
@@ -790,16 +792,18 @@ class LoudnessAnalyzer:
         fig.update_xaxes(title_text="Time (s)", row=1, col=1)
         fig.update_yaxes(title_text="Loudness (Sone)", row=1, col=1)
 
-        fig.add_trace(go.Scatter(x=self.tonality_axis, y=self.tonality_time, mode="lines", name="Tonality"), row=2, col=1)
+        fig.add_trace(go.Scatter(x=self.tonality_axis, y=self.tonality_time, mode="lines", name="Tonality"), row=2,
+                      col=1)
         fig.update_xaxes(title_text="Time (s)", row=2, col=1)
         fig.update_yaxes(title_text="Kt (dB)", row=2, col=1)
 
         fig.add_trace(go.Scatter(x=frequencies, y=psd_db, mode="lines", name="Spectrum"), row=3, col=1)
-        fig.add_trace(go.Scatter(x=bark_axis, y=specific_loudness, mode="lines", name="Specific Loudness"), row=4, col=1)
+        fig.add_trace(go.Scatter(x=bark_axis, y=specific_loudness, mode="lines", name="Specific Loudness"), row=4,
+                      col=1)
 
         fig.update_xaxes(type="log", title_text="Frequency (Hz)", row=3, col=1)
         fig.update_yaxes(title_text="Level (dB)", row=3, col=1)
-        fig.update_xaxes(title_text="Bark", row=4, col=1)
+        fig.update_xaxes(title_text="Bark", dtick=1, row=4, col=1)
         fig.update_yaxes(title_text="Sone/Bark", row=4, col=1)
 
         fig.update_layout(
@@ -816,8 +820,8 @@ class LoudnessAnalyzer:
 
         tonality_table = """
         <h3>DIN45681 Tonality Results</h3>
-        <table border="1" cellpadding="6">
-        <tr>
+        <table border="1" cellpadding="6" style="border-collapse: collapse; width: 100%;">
+        <tr style="background-color: #2c3e50; color: white;">
             <th>Time (s)</th>
             <th>Kt (dB)</th>
             <th>ΔL (dB)</th>
@@ -841,22 +845,107 @@ class LoudnessAnalyzer:
 
         tonality_table += "</table><br>"
 
+        # Integrated Reference Values with clean HTML formatting (Fixed display errors)
+        reference_guide_html = r"""
+        <hr style="margin: 30px 0;">
+        <h2>Acoustic Metrics: Definitions, Reference Baselines & Calibration</h2>
+        <p>This report evaluates audio recordings using standardized psychoacoustic and environmental metrics. Below are their precise definitions, calibration baselines, and real-world references:</p>
+
+        <table border="1" cellpadding="8" style="border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; font-size: 14px;">
+            <tr style="background-color: #2c3e50; color: white;">
+                <th>Metric & Symbol</th>
+                <th>Definition & Calibration Baseline</th>
+                <th>Reference Values & Real-Life Scale</th>
+            </tr>
+            <tr>
+                <td><strong>Loudness (sone)</strong></td>
+                <td>
+                    <strong>Definition:</strong> Linear psychoacoustic scale of perceived volume where doubling the sone value doubles the perceived loudness.<br>
+                    <strong>Calibration/Baseline:</strong> Calculated via ISO 532 (Zwicker method) scaled against a calibration factor derived from reference SPL meter measurements.
+                </td>
+                <td>
+                    <ul>
+                        <li><strong>1.0 sone (Reference):</strong> 1 kHz tone at 40 dB SPL (40 phons) / Quiet refrigerator hum</li>
+                        <li><strong>0.1 – 0.3 sone:</strong> Rustling leaves / quiet studio</li>
+                        <li><strong>4.0 sone:</strong> Normal conversation at 1 meter</li>
+                        <li><strong>16.0+ sone:</strong> City traffic / vacuum cleaner</li>
+                    </ul>
+                </td>
+            </tr>
+            <tr style="background-color: #f9f9f9;">
+                <td><strong>Loudness Level (phon)</strong></td>
+                <td>
+                    <strong>Definition:</strong> Logarithmic measure of loudness level mapped to human equal-loudness contours.<br>
+                    <strong>Calibration/Baseline:</strong> Derived mathematically from sone using 40 + 10 log<sub>2</sub>(sone).
+                </td>
+                <td>
+                    <ul>
+                        <li><strong>0 phon:</strong> Threshold of human hearing</li>
+                        <li><strong>40 phon (Reference):</strong> Matches 1 sone baseline</li>
+                        <li><strong>60 phon:</strong> Normal face-to-face conversation</li>
+                        <li><strong>80 phon:</strong> Highway vehicle cabin noise / hairdryer</li>
+                    </ul>
+                </td>
+            </tr>
+            <tr>
+                <td><strong>DIN 45681 Tonality (<i>K</i><sub>t</sub> in dB)</strong></td>
+                <td>
+                    <strong>Definition:</strong> Evaluates prominent discrete frequency components (tones/hums) against surrounding masking noise.<br>
+                    <strong>Calibration/Baseline:</strong> Uses critical band analysis (Bark scale) and DIN 45681 masking indices (<i>a</i><sub>v</sub>) to assign a dB penalty (0 dB to +6 dB).
+                </td>
+                <td>
+                    <ul>
+                        <li><strong>0 dB:</strong> Broadband noise (ocean waves, wind, smooth HVAC)</li>
+                        <li><strong>1 – 2 dB:</strong> Faint mechanical gear whine or PC fan hum</li>
+                        <li><strong>3 – 4 dB:</strong> Outdoor power transformer or heat pump hum</li>
+                        <li><strong>6 dB:</strong> Maximum penalty for severe tonal inverter/brake noise</li>
+                    </ul>
+                </td>
+            </tr>
+            <tr style="background-color: #f9f9f9;">
+                <td><strong>Sharpness (acum)</strong></td>
+                <td>
+                    <strong>Definition:</strong> Measures high-frequency content and spectral brightness relative to critical band rate (Bark).<br>
+                    <strong>Calibration/Baseline:</strong> Calculated using DIN standard formulas from specific loudness distributions.
+                </td>
+                <td>
+                    <ul>
+                        <li><strong>0.5 – 0.8 acum:</strong> Luxury sedan cabin rumble / muffled bass</li>
+                        <li><strong>1.0 acum (Reference):</strong> Narrow-band noise centered at 1 kHz (160 Hz width) at 60 dB / steady rainfall</li>
+                        <li><strong>1.8 – 2.5 acum:</strong> Standard household vacuum cleaner or inkjet printer</li>
+                        <li><strong>3.5+ acum:</strong> Chalk on a blackboard / metallic squeal</li>
+                    </ul>
+                </td>
+            </tr>
+        </table>
+        <br>
+        """
+
         html = f"""
         <html>
-        <head><title>Acoustic Analysis Report</title></head>
+        <head>
+            <title>Acoustic Analysis Report</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 20px; color: #333; }}
+                h2 {{ color: #2c3e50; }}
+                table {{ margin-bottom: 20px; }}
+                th, td {{ text-align: left; vertical-align: top; }}
+            </style>
+        </head>
         <body>
         <h2>Acoustic Analysis Report</h2>
-        <table border="1" cellpadding="6">
-            <tr><td>File</td><td>{Path(filename).name}</td></tr>
-            <tr><td>Loudness</td><td>{loudness:.2f} sone</td></tr>
-            <tr><td>Phon</td><td>{phon:.1f}</td></tr>
-            <tr><td>Sharpness</td><td>{sharpness:.2f} acum</td></tr>
-            <tr><td>SPL(A)</td><td>{dba:.2f} dB(A)</td></tr>
-            <tr><td>Peak Frequency</td><td>{peak_frequency:.1f} Hz</td></tr>
+        <table border="1" cellpadding="6" style="border-collapse: collapse;">
+            <tr><td><strong>File</strong></td><td>{Path(filename).name}</td></tr>
+            <tr><td><strong>Loudness</strong></td><td>{loudness:.2f} sone</td></tr>
+            <tr><td><strong>Phon</strong></td><td>{phon:.1f}</td></tr>
+            <tr><td><strong>Sharpness</strong></td><td>{sharpness:.2f} acum</td></tr>
+            <tr><td><strong>SPL(A)</strong></td><td>{dba:.2f} dB(A)</td></tr>
+            <tr><td><strong>Peak Frequency</strong></td><td>{peak_frequency:.1f} Hz</td></tr>
         </table>
         <br>
         {tonality_table}
         {fig.to_html(full_html=False, include_plotlyjs='cdn')}
+        {reference_guide_html}
         </body>
         </html>
         """
